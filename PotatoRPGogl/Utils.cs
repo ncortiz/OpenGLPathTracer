@@ -9,7 +9,7 @@ using Silk.NET.Maths;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
-namespace PotatoRPGogl
+namespace OpenGLPathtracer
 {
     using Vec3f = Vector3D<float>;
     using Mat4f = Silk.NET.Maths.Matrix4X4<float>;
@@ -105,7 +105,54 @@ namespace PotatoRPGogl
             gl.TexParameter(TextureTarget.Texture2D, GLEnum.TextureMaxLevel, 8);
             gl.GenerateMipmap(TextureTarget.Texture2D);
 
-            Console.WriteLine($"Loaded image ");
+            Console.WriteLine($"Loaded Texture2D to slot {textureSlot}");
+
+            return tex;
+        }
+
+        public unsafe static uint LoadImageCubemap(GL gl, int textureSlot, string nx, string px, string ny, string py, string nz, string pz)
+        {
+            uint tex = gl.GenTexture();
+            gl.BindTexture(TextureTarget.TextureCubeMap, tex);
+
+            var sides = new Tuple<string, TextureTarget>[] 
+            {
+                Tuple.Create(px, TextureTarget.TextureCubeMapPositiveX),
+                Tuple.Create(nx, TextureTarget.TextureCubeMapNegativeX),
+                Tuple.Create(py, TextureTarget.TextureCubeMapPositiveY),
+                Tuple.Create(ny, TextureTarget.TextureCubeMapNegativeY),
+                Tuple.Create(pz, TextureTarget.TextureCubeMapPositiveZ),
+                Tuple.Create(nz, TextureTarget.TextureCubeMapNegativeZ),
+            };
+
+            foreach (var side in sides)
+            {
+                using (var img = Image.Load<Rgba32>(side.Item1))
+                {
+                    gl.TexImage2D(side.Item2, 0, InternalFormat.Rgba8, (uint)img.Width, (uint)img.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+
+                    img.ProcessPixelRows(accessor =>
+                    {
+                        for (int y = 0; y < accessor.Height; y++)
+                        {
+                            fixed (void* data = accessor.GetRowSpan(y))
+                            {
+                                gl.TexSubImage2D(side.Item2, 0, 0, y, (uint)accessor.Width, 1, PixelFormat.Rgba, PixelType.UnsignedByte, data);
+                            }
+                        }
+                    });
+                }
+            }
+
+            gl.TexParameter(TextureTarget.TextureCubeMap, GLEnum.TextureWrapS, (int)GLEnum.ClampToEdge);
+            gl.TexParameter(TextureTarget.TextureCubeMap, GLEnum.TextureWrapT, (int)GLEnum.ClampToEdge);
+            gl.TexParameter(TextureTarget.TextureCubeMap, GLEnum.TextureMinFilter, (int)GLEnum.LinearMipmapLinear);
+            gl.TexParameter(TextureTarget.TextureCubeMap, GLEnum.TextureMagFilter, (int)GLEnum.Linear);
+            gl.TexParameter(TextureTarget.TextureCubeMap, GLEnum.TextureBaseLevel, 0);
+            gl.TexParameter(TextureTarget.TextureCubeMap, GLEnum.TextureMaxLevel, 8);
+            gl.GenerateMipmap(TextureTarget.TextureCubeMap);
+
+            Console.WriteLine($"Loaded Cubemap");
 
             return tex;
         }
