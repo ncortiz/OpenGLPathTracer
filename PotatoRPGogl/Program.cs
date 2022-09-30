@@ -330,14 +330,15 @@ namespace OpenGLPathtracer
             vec3 att = vec3(1);
             vec3 col;
     
-            for(int i = 0; i < maxBounces; i++) 
+            int i = 0;
+            for(i = 0; i < maxBounces; i++) 
             {
                 vec3 d, e;
         
                 if(!trace_scene(ro, rd, d, e, uv)) 
                 {
                     vec4 hdri = texture(skyhdri, rd);
-                    col += att * tone(hdri.rgb * hdri.a, 1.0f);
+                    col += att * hdri.rgb * hdri.a * 5;
                     break;
                 }
         
@@ -354,7 +355,7 @@ namespace OpenGLPathtracer
                 }
             }
     
-            return col;
+            return col / spp;
         }
 
         void main()
@@ -382,7 +383,7 @@ namespace OpenGLPathtracer
                 vec3 ro = pos + o; //ray origin
                 vec3 rd = ll + h * uv.x + v * uv.y - pos - o; //ray dir
         
-                color += clamp(tone(radiance(ro, rd, uv), 1.f), 0.f, 1.f);
+                color += clamp(tone(radiance(ro, rd, uv), 1.0), 0.0, 1.0);
             }
     
             FragColor = vec4(color / float(spp), 1); // Final color is average of samples tonemapped
@@ -425,13 +426,7 @@ namespace OpenGLPathtracer
             }
 
             Gl = GL.GetApi(window);
-            Gl.Enable(GLEnum.CullFace);
-            Gl.Disable(GLEnum.PolygonSmooth);
-            Gl.Hint(GLEnum.PolygonSmoothHint, GLEnum.Fastest);
-            Gl.CullFace(CullFaceMode.Back);
             Gl.Enable(GLEnum.Texture2D);
-            Gl.Enable(GLEnum.DepthTest);
-            Gl.DepthFunc(GLEnum.Lequal);
 
             skyboxTex = Utils.LoadImageCubemap(Gl, 0, "./Res/nx.png", "./Res/px.png", "./Res/ny.png", "./Res/py.png", "./Res/nz.png", "./Res/pz.png");
             tex1 = Utils.LoadImage(Gl, 0, "./Res/soil.tif");
@@ -521,8 +516,8 @@ namespace OpenGLPathtracer
             lastTime = DateTime.Now;
             deltaTime = (float)dt.TotalSeconds;
 
-            Gl.ClearColor(0,0,0,1);
-            Gl.Clear((uint)ClearBufferMask.ColorBufferBit | (uint)ClearBufferMask.DepthBufferBit);
+            Gl.ClearColor(1,1,1,1);
+            Gl.Clear((uint)ClearBufferMask.ColorBufferBit); 
 
             Gl.BindVertexArray(Vao);
             Gl.UseProgram(shaderId);
@@ -543,7 +538,7 @@ namespace OpenGLPathtracer
             Utils.SetUniform(Gl, shaderId, "tex1", 1);
 
             Utils.SetUniform(Gl, shaderId, "iResolution", new Vec2f(800, 600));
-            Utils.SetUniform(Gl, shaderId, "spp", 15);
+            Utils.SetUniform(Gl, shaderId, "spp", 200);
             Utils.SetUniform(Gl, shaderId, "minBounces", 7);
             Utils.SetUniform(Gl, shaderId, "maxBounces", 15);
             Utils.SetUniform(Gl, shaderId, "vFov", 30.0f);
