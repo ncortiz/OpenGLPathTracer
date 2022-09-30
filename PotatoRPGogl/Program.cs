@@ -315,28 +315,36 @@ namespace OpenGLPathtracer
             return false;
         }
 
-        const vec2 iResolution = vec2(800, 600);
+        uniform vec2 iResolution;
+        uniform int spp;
+        uniform int minBounces;
+        uniform int maxBounces;
+        uniform float vFov; //30
+        uniform vec3 pos; //-0.7,0,0
+        uniform float focalLength; //10
+        uniform float aperture;//0.1
+        uniform vec3 up, right, fwd; //0,1,0 1,0,0 0,0,1  
 
         vec3 radiance(in vec3 ro, in vec3 rd, vec2 uv)
         {
             vec3 att = vec3(1);
             vec3 col;
     
-            for(int i = 0; i < 15; i++) //15 max bounces
+            for(int i = 0; i < maxBounces; i++) 
             {
                 vec3 d, e;
         
                 if(!trace_scene(ro, rd, d, e, uv)) 
                 {
-                    vec4 hdri = texture(skyhdri, rd) * 2f;
-                    col += att * hdri.rgb * hdri.a;
+                    vec4 hdri = texture(skyhdri, rd);
+                    col += att * tone(hdri.rgb * hdri.a, 1.0f);
                     break;
                 }
         
                 col += att * e;    //Emission  
                 att *= d;         //Diffuse color
         
-                if(i > 7) //Russian roulette sampling
+                if(i > minBounces) //Russian roulette sampling
                 { 
                     float p = max(att.x, max(att.y, att.z));
                     if(rand(uv) > p)
@@ -346,27 +354,19 @@ namespace OpenGLPathtracer
                 }
             }
     
-            return col/15;
+            return col;
         }
 
         void main()
         {
-            int spp = 50; //Camera params
-            float aperture = 0.1f;//clamp(sin(iTime * 0.7f) + 0.2f, 0.f, 1.f);
-            float vfov = 30.f;
-            vec3 pos = vec3(-0.7f,0,0);
-            float fl = 10.0f;
+            //clamp(sin(iTime * 0.7f) + 0.2f, 0.f, 1.f);
 
-            vec3 right = vec3(1,0,0); //Camera direction (use for rotation)
-            vec3 up = vec3(0,1,0);
-            vec3 fwd = vec3(0,0,1);
-   
             float aspect = iResolution.x/iResolution.y; //Perspective calculations (frustum)
-            float hh = tan((vfov * (PI / 180.0f)) / 2.0f);
+            float hh = tan((vFov * (PI / 180.0f)) / 2.0f);
             float hw = aspect * hh;
-            vec3 ll = pos - right * hw * fl - up * hh * fl - fwd * fl; 
-            vec3 h = right * fl * 2.0f * hw; 
-            vec3 v = up * fl * 2.0f * hh;
+            vec3 ll = pos - right * hw * focalLength - up * hh * focalLength - fwd * focalLength; 
+            vec3 h = right * focalLength * 2.0f * hw; 
+            vec3 v = up * focalLength * 2.0f * hh;
     
             vec3 color = vec3(0,0,0); 
             for(int i = 0; i < spp; i++) //Supersampling
@@ -539,6 +539,22 @@ namespace OpenGLPathtracer
             Gl.BindTexture(TextureTarget.Texture2D, tex1);
 
             Utils.SetUniform(Gl, shaderId, "iTime", t);
+            Utils.SetUniform(Gl, shaderId, "skyhdri", 0);
+            Utils.SetUniform(Gl, shaderId, "tex1", 1);
+
+            Utils.SetUniform(Gl, shaderId, "iResolution", new Vec2f(800, 600));
+            Utils.SetUniform(Gl, shaderId, "spp", 15);
+            Utils.SetUniform(Gl, shaderId, "minBounces", 7);
+            Utils.SetUniform(Gl, shaderId, "maxBounces", 15);
+            Utils.SetUniform(Gl, shaderId, "vFov", 30.0f);
+            Utils.SetUniform(Gl, shaderId, "pos", new Vec3f(-0.7f,0,0));
+            Utils.SetUniform(Gl, shaderId, "focalLength", 10.0f);
+            Utils.SetUniform(Gl, shaderId, "aperture", 0.1f);
+            Utils.SetUniform(Gl, shaderId, "right", new Vec3f(1, 0, 0));
+            Utils.SetUniform(Gl, shaderId, "up", new Vec3f(0, 1, 0));
+            Utils.SetUniform(Gl, shaderId, "fwd", new Vec3f(0, 0, 1));
+
+
             Utils.SetUniform(Gl, shaderId, "skyhdri", 0);
             Utils.SetUniform(Gl, shaderId, "tex1", 1);
 

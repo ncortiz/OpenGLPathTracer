@@ -12,17 +12,25 @@ using SixLabors.ImageSharp.PixelFormats;
 namespace OpenGLPathtracer
 {
     using Vec3f = Vector3D<float>;
+    using Vec2f = Vector2D<float>;
+
     using Mat4f = Silk.NET.Maths.Matrix4X4<float>;
 
     class Utils
     {
+        static List<string> alreadyWarned = new List<string>();
+
         public static unsafe bool SetUniform<T>(GL gl, uint shader, string uniform, T v)
         {
             int location = gl.GetUniformLocation(shader, uniform);
 
             if (location == -1)
             {
-                Console.WriteLine($"Cannot find uniform '{uniform}' of type '{typeof(T).Name}' for shader");
+                if (!alreadyWarned.Contains(uniform))
+                {
+                    alreadyWarned.Add(uniform);
+                    Console.WriteLine($"Cannot find uniform '{uniform}' of type '{typeof(T).Name}' for shader");
+                }
                 return false;
             }
 
@@ -46,6 +54,11 @@ namespace OpenGLPathtracer
             {
                 var vec3 = (Vec3f)Convert.ChangeType(v, typeof(Vec3f));
                 gl.ProgramUniform3(shader, location, vec3.X, vec3.Y, vec3.Z);
+            }
+            else if (typeof(T) == typeof(Vec2f))
+            {
+                var vec2 = (Vec2f)Convert.ChangeType(v, typeof(Vec2f));
+                gl.ProgramUniform2(shader, location, vec2.X, vec2.Y);
             }
             else if (typeof(T) == typeof(float))
             {
