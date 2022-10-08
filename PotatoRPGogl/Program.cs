@@ -223,96 +223,120 @@ namespace OpenGLPathtracer
             else
                 return normalize(refracted); //refraction
         }
+        
+        struct Object
+        {
+            vec3 pos;
+            float radius;
+            int bsdf;
+            vec3 diffuse;
+            vec3 emissive;
+            float arg; //ior or smoothness
+        };
 
+        const int bsdf_light = 0;
+        const int bsdf_sphere = 1;
+        const int bsdf_cosine_weighted = 2;
+        const int bsdf_metal = 3;
+        const int bsdf_phong_metal = 4;
+        const int bsdf_dielectric = 5;
 
         //Main 
         bool trace_scene(inout vec3 ro, inout vec3 rd, out vec3 d, out vec3 e, vec2 screen_uv)
         { 
+
+
             //n: normal, p: point, t: tangent, d: diffuse, e: emission, ro: ray origin, rd: ray direction, uv: tex coords
             vec3 n, p, t; 
             vec2 uv;
-            float tmax = 1000.f;
             float dist;
             //Here in the event of a ray-object collision we set diffuse and emission based on 
             //e objects properties and set the direction of the ray based on the objects bsdf.
             //As well as tmax to the objects distance (doesnt make a difference yet since we lack depth sorting)
         
-            bool o1 = trace_sphere(ro, rd, vec3(sin(iTime * 0.8f) - 0.8f,0.5f + sin(iTime * 2.f) * 0.5f,-10.f+sin(iTime * 1.5f)), 1.f, 0.001f, tmax, p, n, t, uv, dist);
-            if(o1)
-            {
-                d = vec3(0.9,0.9,0.9);
-                e = vec3(0);
-        
-                ro = p;
-                rd = sample_dielectric(n, rd, 1.52f, screen_uv);//or 1.02 for less of an effect
-                tmax = dist;
-                return true;
-            }
-    
-            bool o2 = trace_sphere(ro, rd, vec3(1.5f,0,-12.f + (sin((0.65f * PI) + iTime * 1.2f) * 1.5f)), 1.f, 0.001f, tmax, p, n, t, uv, dist);
-            if(o2)
-            {
-                d = vec3(.7,.7,0);
-                e = vec3(0);
-        
-                ro = p;
-                rd = sample_metal(n, rd, 0.7f, screen_uv);
-                tmax = dist;
-                return true;
-            }
-    
-            bool o3 = trace_sphere(ro, rd, vec3(-1.5f + sin(iTime*3.0f)*0.6f,1.f + sin(iTime*3.f)*0.6f,-12), 1.f, 0.001f, tmax, p, n, t, uv, dist);
-            if(o3)
-            {
-                d = vec3(0,0,0);
-                e = vec3(1,1,0.4f) * 30.f;
-        
-                ro = p;
-                rd = vec3(0);
-                tmax = dist;
-                return true;
+            vec3 p1 = vec3(sin(iTime * 0.8f) - 0.8f - 1,
+                                    0.5f + sin(iTime * 2.f) * 0.5f,
+                                    -5.f+sin(iTime * 1.5f));
+
+            vec3 p2 = vec3(sin(iTime * 0.4f) - 0.8f,0.5f + sin(iTime * 2.f) * 0.5f,-10.f+sin(iTime * 1.5f));
+
+            vec3 p3 = vec3(1.5f,0,-12.f + (sin((0.65f * PI) + iTime * 1.2f) * 1.5f));
+
+            vec3 p4 = vec3(-1.5f + sin(iTime*3.0f)*0.6f,1.f + sin(iTime*3.f)*0.6f,-12);
+
+            vec3 p5 = vec3(-3.f + sin(iTime * 0.5f) * 0.5f,0,-12.f + sin(iTime * 0.5f) * .3f);
+
+            Object object[8];
+            //object[1] = Object(p1, 1.f, bsdf_dielectric, vec3(0.9), vec3(0), 1.02f);
+            object[1] = Object(p2, 1.f, bsdf_dielectric, vec3(0.9), vec3(0), 1.52);
+            object[2] = Object(p3, 1.f, bsdf_metal, vec3(0.7f,0.7f,0), vec3(0), 0.7f);
+
+            object[3] = Object(p4, 1.f, bsdf_light, vec3(0), vec3(1,1,0.4f)*30.0f, 0);
+           // object[4] = Object(p5, 1.f, bsdf_metal, texture(tex1, uv).rgb, vec3(0), 0);
+           // object[5] = Object(vec3(3.5f,0,-12.f), 1.f, bsdf_cosine_weighted, texture(tex1, uv).rgb, vec3(0), 0);
+
+            //floor sphere
+            object[0] = Object(vec3(-1.5f,-1005,-12), 1004.f, bsdf_cosine_weighted, vec3(.5,.2,.2), vec3(0), 0);
+
+            for (int n = 7; n >= 0 ; --n) {
+             for (int i = 0; i < n; ++i) {
+                float distA = distance(object[i].pos, ro);
+                float distB = distance(object[i+1].pos, ro);
+
+                if(distA > distB)
+               {
+                   Object tmp = object[i+1];
+                    object[i+1] = object[i];
+                    object[i] = tmp;
+                }    
+              }
             }
 
+            float tmin = 0.01f;
+            float tmax = 1000.0f;
+            bool hit = false;
+            for(int i = 0; i < 4; i++)
+            {
+                Object v = object[i];
+                if(trace_sphere(ro, rd, v.pos, v.radius, tmin, tmax, p, n, t, uv, dist))
+                {
+                   // if(dist < tmax)
+                   //     tmax = dist;
 
-            //disabled to lower compilation time    
-            bool o4 = trace_sphere(ro, rd, vec3(-3.f + sin(iTime * 0.5f) * 0.5f,0,-12.f + sin(iTime * 0.5f) * .3f), 1.f, 0.001f, tmax, p, n, t, uv, dist);
-            if(o4)
-            {
-                d = texture(tex1, uv).rgb;
-                e = vec3(0);
+                    d = v.diffuse;
+                    e = v.emissive;
         
-                ro = p;
-                rd = sample_metal(n, rd, 0.0f, screen_uv);
-                tmax = dist;
-                return true;
-            }
-    
-            bool o5 = trace_sphere(ro, rd, vec3(3.5f,0,-12.f), 1.f, 0.001f, tmax, p, n, t, uv, dist);
-            if(o5)
-            {
-                d = texture(tex1, uv).rgb;
-                e = vec3(0);
-        
-                ro = p;
-                rd = sample_cosine_weighted(n, screen_uv);
-                tmax = dist;
-                return true;
-            }
-    
-            bool o6 = trace_sphere(ro, rd, vec3(-1.5f,-1001,-12), 1000.f, 0.001f, tmax, p, n, t, uv, dist);
-            if(o6)
-            {
-                d = vec3(.5,.2,.2); //diffuse color
-                e = vec3(0); //emission
-        
-                ro = p; //ray origin out 
-                rd = sample_cosine_weighted(n, uv); //ray dir out
-                tmax = dist; //for depth testing 
-                return true;
+                    ro = p;
+
+                    if(v.bsdf == bsdf_light)
+                    {
+                        rd = vec3(0);
+                    }
+                    else if(v.bsdf == bsdf_sphere)
+                    {
+                        rd = sample_sphere(screen_uv);
+                    }
+                    else if(v.bsdf == bsdf_cosine_weighted)
+                    {
+                        rd = sample_cosine_weighted(n, screen_uv);
+                    }
+                    else if(v.bsdf == bsdf_metal)
+                    {
+                        rd = sample_metal(n, rd, v.arg, screen_uv);
+                    }
+                    else if(v.bsdf == bsdf_phong_metal)
+                    {
+                        rd = sample_phong_metal(n, rd, v.arg, screen_uv);
+                    }
+                    else if(v.bsdf == bsdf_dielectric)
+                    {
+                        rd = sample_dielectric(n, rd, v.arg, screen_uv);
+                    }
+                    return true;
+                }
             }
 
-    
-            return false;
+            return hit;
         }
 
         uniform vec2 iResolution;
@@ -345,7 +369,7 @@ namespace OpenGLPathtracer
                 col += att * e;    //Emission  
                 att *= d;         //Diffuse color
         
-                if(i > minBounces) //Russian roulette sampling
+                if(i > minBounces) //Roulette sampling
                 { 
                     float p = max(att.x, max(att.y, att.z));
                     if(rand(uv) > p)
@@ -360,8 +384,6 @@ namespace OpenGLPathtracer
 
         void main()
         {
-            //clamp(sin(iTime * 0.7f) + 0.2f, 0.f, 1.f);
-
             float aspect = iResolution.x/iResolution.y; //Perspective calculations (frustum)
             float hh = tan((vFov * (PI / 180.0f)) / 2.0f);
             float hw = aspect * hh;
@@ -510,6 +532,9 @@ namespace OpenGLPathtracer
         static float deltaTime;
         static DateTime lastTime;
 
+        static Quat rotation = Quat.Identity;
+        const float DEG2RAD = MathF.PI / 180.0f;
+
         static unsafe void OnRender(double obj)
         {
             var dt = DateTime.Now - lastTime;
@@ -533,21 +558,35 @@ namespace OpenGLPathtracer
             Gl.ActiveTexture(GLEnum.Texture1);
             Gl.BindTexture(TextureTarget.Texture2D, tex1);
 
+            rotation = rotation * Quat.CreateFromYawPitchRoll(0,0, moveInput.W * 45.0f * deltaTime * DEG2RAD);      
+
+            var rotAssimp = new Assimp.Quaternion(rotation.W, rotation.X, rotation.Y, rotation.Z);
+            var rightAssimp = Assimp.Quaternion.Rotate(new Assimp.Vector3D(1, 0, 0), rotAssimp);
+            var upAssimp = Assimp.Quaternion.Rotate(new Assimp.Vector3D(0, 1, 0), rotAssimp);
+            var fwdAssimp = Assimp.Quaternion.Rotate(new Assimp.Vector3D(0, 0, 1), rotAssimp);
+            var right = new Vec3f(rightAssimp.X, rightAssimp.Y, rightAssimp.Z);
+            var up = new Vec3f(upAssimp.X, upAssimp.Y, upAssimp.Z);
+            var fwd = new Vec3f(fwdAssimp.X, fwdAssimp.Y, fwdAssimp.Z);
+
+            var movement = moveInput * 5f * deltaTime;
+            pos += right * movement.X + up * movement.Y + fwd * movement.Z;
+
             Utils.SetUniform(Gl, shaderId, "iTime", t);
             Utils.SetUniform(Gl, shaderId, "skyhdri", 0);
             Utils.SetUniform(Gl, shaderId, "tex1", 1);
 
             Utils.SetUniform(Gl, shaderId, "iResolution", new Vec2f(800, 600));
-            Utils.SetUniform(Gl, shaderId, "spp", 200);
-            Utils.SetUniform(Gl, shaderId, "minBounces", 7);
-            Utils.SetUniform(Gl, shaderId, "maxBounces", 15);
+            Utils.SetUniform(Gl, shaderId, "spp", 20);
+            Utils.SetUniform(Gl, shaderId, "minBounces", 5);
+            Utils.SetUniform(Gl, shaderId, "maxBounces", 7);
             Utils.SetUniform(Gl, shaderId, "vFov", 30.0f);
-            Utils.SetUniform(Gl, shaderId, "pos", new Vec3f(-0.7f,0,0));
+            Utils.SetUniform(Gl, shaderId, "pos", pos);
             Utils.SetUniform(Gl, shaderId, "focalLength", 10.0f);
             Utils.SetUniform(Gl, shaderId, "aperture", 0.1f);
-            Utils.SetUniform(Gl, shaderId, "right", new Vec3f(1, 0, 0));
-            Utils.SetUniform(Gl, shaderId, "up", new Vec3f(0, 1, 0));
-            Utils.SetUniform(Gl, shaderId, "fwd", new Vec3f(0, 0, 1));
+
+            Utils.SetUniform(Gl, shaderId, "right", right);
+            Utils.SetUniform(Gl, shaderId, "up", up);
+            Utils.SetUniform(Gl, shaderId, "fwd", fwd);
 
 
             Utils.SetUniform(Gl, shaderId, "skyhdri", 0);
@@ -557,13 +596,22 @@ namespace OpenGLPathtracer
         }
 
         static DateTime lastFPSReadout;
+        static int fpsSamples;
+        static float fpsSum;
 
         static void OnUpdate(double obj)
         {
-            if ((DateTime.Now - lastFPSReadout).TotalSeconds > 0.3f)
+            fpsSum += 1.0f / deltaTime;
+            fpsSamples++;
+
+            if ((DateTime.Now - lastFPSReadout).TotalSeconds > 0.5f)
             {
+                var avgFps = fpsSum / fpsSamples;
+                fpsSum = 0;
+                fpsSamples = 0;
+
                 lastFPSReadout = DateTime.Now;
-                window.Title = $"PotatoRPG FPS: {1.0f / deltaTime}";
+                window.Title = $"PotatoRPG FPS: {avgFps}";
             }
         }
 
@@ -576,18 +624,78 @@ namespace OpenGLPathtracer
             Gl.DeleteTexture(skyboxTex);
         }
 
+        static Vec4f moveInput;
+        static Vec3f pos = new Vec3f(-0.7f, 0, 0);
+
         private static void KeyDown(IKeyboard arg1, Key arg2, int arg3)
         {
             if (arg2 == Key.Escape)
                 window.Close();
+
+            if (arg2 == Key.W)
+                moveInput.Z = -1;
+            if (arg2 == Key.S)
+                moveInput.Z = 1;
+
+            if (arg2 == Key.A)
+                moveInput.X = -1;
+            if (arg2 == Key.D)
+                moveInput.X = 1;
+
+            if (arg2 == Key.ShiftLeft)
+                moveInput.Y = -1;
+            if (arg2 == Key.Space)
+                moveInput.Y = 1;
+
+            if (arg2 == Key.Q)
+                moveInput.W = -1;
+            if (arg2 == Key.E)
+                moveInput.W = 1;
         }
 
         private static void KeyUp(IKeyboard arg1, Key arg2, int arg3)
         {
+            if (arg2 == Key.W)
+                moveInput.Z = 0;
+            if (arg2 == Key.S)
+                moveInput.Z = 0;
+
+            if (arg2 == Key.A)
+                moveInput.X = 0;
+            if (arg2 == Key.D)
+                moveInput.X = 0;
+
+            if (arg2 == Key.ShiftLeft)
+                moveInput.Y = 0;
+            if (arg2 == Key.Space)
+                moveInput.Y = 0;
+
+            if (arg2 == Key.Q)
+                moveInput.W = 0;
+            if (arg2 == Key.E)
+                moveInput.W = 0;
         }
+
+        static System.Numerics.Vector2 prevMousePos;
+        static bool prevSet = false;
 
         private static unsafe void OnMouseMove(IMouse mouse, System.Numerics.Vector2 position)
         {
+            const float mouseSensitivity = 0.15F;
+
+            if (prevSet)
+            {
+                var delta = prevMousePos - position;
+
+                rotation = rotation *Quat.CreateFromYawPitchRoll(
+                        delta.X * mouseSensitivity * DEG2RAD, 
+                        delta.Y * mouseSensitivity * DEG2RAD, 0);
+            }
+            else
+                prevSet = true;
+
+            prevMousePos = position;
+
         }
     }
 }
