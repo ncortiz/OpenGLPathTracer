@@ -7,6 +7,8 @@ was adapted from my own simplified CUDA C++ code.
 
 Almost all the code is contained in a 700ln file. (the shadertoy GLSL was 352 loc)
 
+Link https://www.shadertoy.com/view/wtfcDB
+
 
 ![render2](https://user-images.githubusercontent.com/8173214/193342359-8d2c40f9-334f-4641-99a4-4f537cb65be4.png)
 
